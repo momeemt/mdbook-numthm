@@ -220,21 +220,24 @@ fn find_and_replace_refs(
     refs: &HashMap<String, LabelInfo>,
 ) -> String {
     // see https://regex101.com/ for an explanation of the regex
-    let re: Regex = Regex::new(r"\{\{(?P<reftype>ref:|tref:)\s*(?P<label>.*?)\}\}").unwrap();
+    let re: Regex = Regex::new(r"\{\{(?P<reftype>ref:|tref:|fref:)\s*(?P<label>.*?)\}\}").unwrap();
 
     re.replace_all(s, |caps: &regex::Captures| {
         let label = caps.name("label").unwrap().as_str().to_string();
         if refs.contains_key(&label) {
+            let info = refs.get(&label).unwrap();
+            let text_owned;
             let text = match caps.name("reftype").unwrap().as_str() {
-                "ref:" => &refs.get(&label).unwrap().num_name,
-                _ => {
-                    // this must be tref if there is a match
-                    match &refs.get(&label).unwrap().title {
-                        Some(t) => t,
-                        // fallback to the numbered name in case the label does not have an associated title
-                        None => &refs.get(&label).unwrap().num_name,
-                    }
+                "ref:"  => &info.num_name,
+                "tref:" => info.title.as_deref().unwrap_or(&info.num_name),
+                "fref:" => {
+                    text_owned = match &info.title {
+                        Some(t) => format!("{} ({})", info.num_name, t),
+                        None    => info.num_name.clone(),
+                    };
+                    &text_owned
                 }
+                _ => unreachable!(),
             };
             let path_to_ref = &refs.get(&label).unwrap().path;
             let rel_path = compute_rel_path(chap_path, path_to_ref);
